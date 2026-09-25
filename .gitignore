@@ -1,0 +1,43 @@
+# ===== 隐私（绝不入库）=====
+.env
+.env.*
+!.env.example
+目前可用api.txt
+
+# 个人手写采集照片（训练原料，含个人笔迹隐私）
+samples/*.jpg
+samples/*.jpeg
+samples/*.png
+samples/*.JPG
+samples/*.PNG
+samples/补录*.jpg
+!samples/demo_homework.pdf
+
+# 作业测试（真实试卷/个人作业）
+作业测试/
+GodApp（个人用）/
+GodApp_1.*/
+
+# 归档与本地杂物
+_归档/
+output/
+*.log
+
+# 发行包（见 GitHub Releases）
+*.zip
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+
+# ===== IDE / 系统 =====
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+.DS_Store
