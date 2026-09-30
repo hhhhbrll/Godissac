@@ -1,4 +1,4 @@
-# God · 高中语文作业代笔工具
+# GodApp · 高中语文作业代笔工具
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
