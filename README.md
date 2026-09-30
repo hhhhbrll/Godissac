@@ -26,8 +26,8 @@
 ## 安装
 
 ```bash
-git clone https://github.com/issac15216866223-coder/God.git
-cd God
+git clone https://github.com/hhhhbrll/Godissac.git
+cd Godissac
 pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 ```
 
@@ -72,7 +72,7 @@ python god.py render              # 改完答案后重新渲染
 ## 项目结构
 
 ```
-God/
+Godissac/
 ├── god.py / god_app.py          # 命令行入口 / 交互式菜单
 ├── src/
 │   ├── recognize/               # 空位提取、分批、调用模型、OCR
