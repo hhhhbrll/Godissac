@@ -57,7 +57,7 @@
 ### 安装
 
 ```bash
-git clone https://github.com/<你的用户名>/God.git
+git clone https://github.com/issac15216866223-coder/God.git
 cd God
 pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 ```
