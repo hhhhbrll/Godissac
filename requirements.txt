@@ -1,11 +1,10 @@
-# M1 渲染引擎依赖
-PyMuPDF>=1.24
-fonttools>=4.51
-
-# VLM API 客户端
-dashscope>=1.20.0        # 阿里百炼 qwen-vl
-openai>=1.40.0           # 中转站 Gemini 等 OpenAI 兼容模型
-
-# 后续模块依赖（现在注释，用到再装）
-# opencv-python    # M3 字体工坊：切字/二值化
+# GodApp 依赖
+pymupdf>=1.24.0
+opencv-python>=4.9.0
+numpy>=1.26.0
+fonttools>=4.51.0
+potracer>=0.0.4
+Pillow>=10.0.0
+dashscope>=1.20.0
+openai>=1.30.0
 pywin32 ; platform_system == 'Windows' 

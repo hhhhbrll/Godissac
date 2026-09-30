@@ -18,12 +18,39 @@ from .renderer import BlankSpec, HandwriteRenderer
 ROOT = Path(__file__).resolve().parents[2]
 # 默认字体：优先完整字库，否则300字版，最后回退文楷
 _FONT_CANDIDATES = [
+    ROOT / "assets" / "fonts" / "myhand_full.ttf",
     ROOT / "output" / "myhand_full.ttf",
     ROOT / "output" / "myhand.ttf",
     ROOT / "fonts" / "LXGWWenKai-Regular.ttf",
 ]
 FONT = next((p for p in _FONT_CANDIDATES if p.exists()), _FONT_CANDIDATES[-1])
 FALLBACK = ROOT / "fonts" / "LXGWWenKai-Regular.ttf"
+# 渲染风格配置（用户可在 config/render_style.json 手动调整，也可用软件菜单）
+STYLE_PATH = ROOT / "config" / "render_style.json"
+_DEFAULT_STYLE = {"print_fade": 0.1, "ink_darken": 0.016}
+
+
+def _load_style() -> dict:
+    """读渲染风格：print_fade=题目变淡(0~0.6)，ink_darken=手写加深(0~0.08)。"""
+    style = dict(_DEFAULT_STYLE)
+    if STYLE_PATH.exists():
+        try:
+            style.update(json.loads(STYLE_PATH.read_text(encoding="utf-8")))
+        except Exception:
+            pass
+    style["print_fade"] = min(max(float(style.get("print_fade", 0)), 0.0), 0.6)
+    style["ink_darken"] = min(max(float(style.get("ink_darken", 0)), 0.0), 0.08)
+    return style
+
+
+def _fade_print(doc: fitz.Document, fade: float) -> None:
+    """题目变淡：每页整页叠加半透明白层（文本/图片统一变淡，减轻打印痕迹）。
+    须在渲染手写答案之前调用——手写字保持原墨色，与淡题目形成对比。"""
+    if fade <= 0:
+        return
+    for page in doc:
+        page.draw_rect(page.rect, color=None, fill=(1, 1, 1),
+                       fill_opacity=fade, width=0, overlay=True)
 
 
 def _subset(doc: fitz.Document) -> None:
@@ -59,19 +86,28 @@ def main(review_path: str):
     orig = data.get("original", str(src_pdf))
     stem = Path(orig).stem
 
-    # ① 答案层（透明，与题目分离）
+    # 渲染风格（题目变淡/手写加深，见 config/render_style.json）
+    style = _load_style()
+    params = PerturbParams()
+    if style["ink_darken"] > 0:
+        # 手写墨色整体加深：灰度值下移，下限钳到 0（全黑）
+        params.ink_min = max(0.0, params.ink_min - style["ink_darken"])
+        params.ink_max = max(params.ink_min, params.ink_max - style["ink_darken"])
+
+    # ① 答案层（透明，与题目分离；不受 print_fade 影响）
     src = fitz.open(src_pdf)
     layer = fitz.open()
     for p in src:
         layer.new_page(width=p.rect.width, height=p.rect.height)
-    renderer = HandwriteRenderer(FONT, PerturbParams(), base_size=14,
+    renderer = HandwriteRenderer(FONT, params, base_size=14,
                                   fallback_font=FALLBACK)
     results = [renderer.render(layer, b) for b in blanks]
     _subset(layer)
     layer.save(out_dir / f"{stem}_答案层.pdf", garbage=4, deflate=True)
 
-    # ② 合并版
+    # ② 合并版：先淡题目再写手写——手写墨色不受白层影响，对比突出
     merged = fitz.open(src_pdf)
+    _fade_print(merged, style["print_fade"])
     for b in blanks:
         renderer.render(merged, b)
     _subset(merged)
