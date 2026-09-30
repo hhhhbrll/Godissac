@@ -120,6 +120,7 @@ def process_pdf_textfirst(src: Path, run_dir: Path,
     import re as _re
     import json as _json
     from .text_llm import load_env_config, resolve_backend, _call_openai, _call_dashscope
+    cfg = load_env_config()
     for _round in range(2):
         missing = [b.no for b in blanks
                    if not answers.get(str(b.no), "").strip()
@@ -127,33 +128,47 @@ def process_pdf_textfirst(src: Path, run_dir: Path,
         if not missing or len(missing) >= len(blanks):
             break
         print(f"⚠ {len(missing)} 个空位无答案，第{_round + 1}轮补答...")
-        # 只带缺失空位所在批次的篇章文本（大批量时不重发全文）
+        # 按批次分批补答：缺失空位可能散布全卷，若把所有批次文本拼成
+        # 一个请求会超模型输入上限（qwen-max 30720 tokens，曾报
+        # 400: Range of input length should be [1, 30720]）。
+        # 每批单独发（与初次作答等长，初次能成功补答也能成功）。
         miss_set = set(missing)
-        need_texts = [t for t, ns in batches if miss_set & set(ns)]
-        ctx_text = "\n".join(need_texts)
-        ctx_lines = "\n".join(
-            f"【{b.no}】{'前文:' + b.prev[-14:]}{'(容量' + str(max(1, round(b.w / 10.4))) + '字)' if b.type == 'bracket' else ''}"
-            for b in blanks if b.no in missing)
-        retry_prompt = (_lp(run_prompt)
-                        + f"\n\n【作业文本（含【N】空位标记）】\n{ctx_text}\n\n"
-                          f"下面这些编号尚未作答（附前文提示），"
-                          f"请只输出紧凑单行JSON补答这些编号：\n{ctx_lines}\n"
-                          f"句读题输出原句加\"/\"；翻译题输出完整译文；不确定填空字符串。")
-        cfg = load_env_config()
-        backend, api_key, base_url, model = resolve_backend(cfg, model_spec)
+        filled_this_round = 0
         try:
-            if backend in ("relay", "zhipu"):
-                text = _call_openai(api_key, base_url, model, retry_prompt,
-                                    timeout=120, max_tokens=4000)
-            else:
-                text = _call_dashscope(api_key, model, retry_prompt, timeout=120)
-            m = _re.search(r"\{.*\}", text, _re.S)
-            if m:
-                for k, v in _json.loads(m.group(0)).items():
-                    if str(k) in [str(x) for x in missing] and str(v).strip():
-                        answers[str(k)] = str(v).strip()
-        except Exception as e:  # noqa: BLE001 补答失败不致命
+            backend, api_key, base_url, model = resolve_backend(cfg, model_spec)
+        except Exception as e:  # noqa: BLE001
             print(f"  补答失败: {e}")
+            break
+        for bi, (batch_text, batch_nos) in enumerate(batches, 1):
+            batch_missing = miss_set & set(batch_nos)
+            if not batch_text or not batch_missing:
+                continue
+            ctx_lines = "\n".join(
+                f"【{b.no}】{'前文:' + b.prev[-14:]}{'(容量' + str(max(1, round(b.w / 10.4))) + '字)' if b.type == 'bracket' else ''}"
+                for b in blanks if b.no in batch_missing)
+            retry_prompt = (_lp(run_prompt)
+                            + f"\n\n【作业文本（含【N】空位标记）】\n{batch_text}\n\n"
+                              f"下面这些编号尚未作答（附前文提示），"
+                              f"请只输出紧凑单行JSON补答这些编号：\n{ctx_lines}\n"
+                              f"句读题输出原句加\"/\"；翻译题输出完整译文；不确定填空字符串。")
+            try:
+                if backend in ("relay", "zhipu"):
+                    text = _call_openai(api_key, base_url, model, retry_prompt,
+                                        timeout=120, max_tokens=4000)
+                else:
+                    text = _call_dashscope(api_key, model, retry_prompt, timeout=120)
+                m = _re.search(r"\{.*\}", text, _re.S)
+                if m:
+                    for k, v in _json.loads(m.group(0)).items():
+                        if (str(k) in [str(x) for x in batch_missing]
+                                and str(v).strip()
+                                and not answers.get(str(k), "").strip()):
+                            answers[str(k)] = str(v).strip()
+                            filled_this_round += 1
+            except Exception as e:  # noqa: BLE001 单批失败不阻断其余批
+                print(f"  [批 {bi}] 补答失败: {e}")
+        if filled_this_round == 0:
+            print("  本轮无进展，停止补答")
             break
     missing = [b.no for b in blanks
                if not answers.get(str(b.no), "").strip()
